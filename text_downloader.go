@@ -84,6 +84,7 @@ func readCSV(path string, output chan<- Textbook) error {
 			return errors.New(fmt.Sprintf("Unexpected number of columns in row %d: %v", rowIndex, record))
 		}
 		if rowIndex == 0 {
+			// The first line of CSV is column names, not a valid row.
 			rowIndex++
 			continue
 		}
@@ -167,7 +168,7 @@ func processTextbook(textbook Textbook) {
 	filename := sanitizePath(fmt.Sprintf("%s (%s).pdf", textbook.title, textbook.electronicISBN))
 	toPath := filepath.Join("output", filename)
 	downloadContent(url, toPath)
-	fmt.Printf("Downloaded to %s\n", filename)
+	fmt.Printf("Downloaded %s\n", filename)
 }
 
 func processTextbooks(textbooks <-chan Textbook) {
@@ -180,7 +181,7 @@ func downloadTextbooksFromFile(path string) error {
 	textbooks := make(chan Textbook)
 	var err error
 	var wg sync.WaitGroup
-	workerPoolSize := 200
+	workerPoolSize := 100
 	wg.Add(workerPoolSize+1)
 	go func() {
 		defer wg.Done()
