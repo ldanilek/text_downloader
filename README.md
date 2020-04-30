@@ -9,8 +9,7 @@ So many of these textbooks looked cool, and I didn't want to download each one i
 
 1. Clone this repo.
 2. Install [Docker](https://www.docker.com/products/docker-desktop).
-3. Create the `output` directory.
-4. `make run`
+3. `make run`
 
 ## Caveats
 
