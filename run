@@ -1,0 +1,4 @@
+#!/bin/bash
+
+make &&
+docker run -it -v $PWD:/usr/src/text_downloader -w /usr/src/text_downloader golang:1.13-alpine ./text_downloader $@

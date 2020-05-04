@@ -7,9 +7,10 @@ So many of these textbooks looked cool, and I didn't want to download each one i
 
 ## Usage
 
-1. Clone this repo.
-2. Install [Docker](https://www.docker.com/products/docker-desktop).
-3. `make run`
+1. Install and run [Docker](https://www.docker.com/products/docker-desktop).
+2. Clone this repo.
+3. `./run` from the root of this repo.
+    - Configuration: `./run -help` to see flags. For example, you can choose to download EPUBs instead of the default PDF.
 
 ## Caveats
 

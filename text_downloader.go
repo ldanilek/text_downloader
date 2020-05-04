@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"regexp"
 	"path/filepath"
+	"flag"
 )
 
 func retry(f func() error) {
@@ -68,6 +69,10 @@ type Textbook struct {
 	openURL string
 }
 
+func (t Textbook) String() string {
+	return fmt.Sprintf("{Title: '%s', Author: '%s', ISBN: %s, URL: %s}", t.title, t.author, t.electronicISBN, t.openURL)
+}
+
 func readCSV(path string, output chan<- Textbook) error {
 	file := readFile(path)
 	defer file.Close()
@@ -99,8 +104,33 @@ func readCSV(path string, output chan<- Textbook) error {
 	}
 }
 
-var re = regexp.MustCompile("a href=\"(.*)\" title=\"Download this book in PDF format\"")
+type textbookFormat string
+var (
+	pdf = textbookFormat("pdf")
+	epub = textbookFormat("epub")
+)
 
+func (f textbookFormat) Name() string {
+	return strings.ToUpper(string(f))
+}
+
+func (f textbookFormat) Extension() string {
+	return strings.ToLower(string(f))
+}
+
+var format = pdf
+
+var reOnce sync.Once
+var re *regexp.Regexp
+
+func regex() *regexp.Regexp {
+	reOnce.Do(func() {
+		re = regexp.MustCompile(fmt.Sprintf("a href=\"(.*)\" title=\"Download this book in %s format\"", format.Name()))
+	})
+	return re
+}
+
+// Returns empty string if it can't find content url.
 func contentURL(textbook Textbook) string {
 	var urlForContent string
 	retry(func() error {
@@ -109,14 +139,13 @@ func contentURL(textbook Textbook) string {
 		lineReader := bufio.NewReader(landingPageReader)
 		for {
 			line, err := lineReader.ReadString('\n')
-			if err != nil {
+			if err == io.EOF {
+				break
+			} else if err != nil {
 				return err
 			}
-			if strings.Contains(line, "Download this book in PDF format") {
-				submatch := re.FindStringSubmatch(line)
-				if len(submatch) < 2 {
-					return errors.New(fmt.Sprintf("couldn't parse content url from download link %s for textbook %v", line, textbook))
-				}
+			submatch := regex().FindStringSubmatch(line)
+			if len(submatch) >= 2 {
 				urlPath := submatch[1]
 				parsedURL, err := url.Parse(textbook.openURL)
 				if err != nil {
@@ -128,7 +157,8 @@ func contentURL(textbook Textbook) string {
 				return nil
 			}
 		}
-		return errors.New(fmt.Sprintf("couldn't find pdf download link for textbook %v", textbook))
+		fmt.Fprintf(os.Stderr, "Can't find content url for textbook %s for format %s\n", textbook, format.Name())
+		return nil
 	})	
 	return urlForContent
 }
@@ -165,10 +195,14 @@ func sanitizePath(path string) string {
 
 func processTextbook(textbook Textbook) {
 	url := contentURL(textbook)
-	filename := sanitizePath(fmt.Sprintf("%s (%s).pdf", textbook.title, textbook.electronicISBN))
+	if len(url) == 0 {
+		return
+	}
+	filename := sanitizePath(fmt.Sprintf("%s (%s).%s", textbook.title, textbook.electronicISBN, format.Extension()))
 	toPath := filepath.Join("output", filename)
+	fmt.Printf("Download begins:\t%s\n", toPath)
 	downloadContent(url, toPath)
-	fmt.Printf("Downloaded %s\n", filename)
+	fmt.Printf("Download complete:\t%s\n", toPath)
 }
 
 func processTextbooks(textbooks <-chan Textbook) {
@@ -199,7 +233,18 @@ func downloadTextbooksFromFile(path string) error {
 }
 
 func main() {
+	csvpath := flag.String("filepath", "csv/Free+English+textbooks.csv", "path to csv file identifying free Springer textbooks")
+	fileFormat := flag.String("format", "pdf", "pdf or epub. Note not all texts are available as epub.")
+	flag.Parse()
+	switch strings.ToLower(*fileFormat) {
+	case "pdf":
+		format = pdf
+	case "epub":
+		format = epub
+	default:
+		panic(fmt.Sprintf("format '%s' must be pdf or epub", fileFormat))
+	}
 	retry(func() error {
-		return downloadTextbooksFromFile("Free+English+textbooks.csv")
+		return downloadTextbooksFromFile(*csvpath)
 	})
 }
